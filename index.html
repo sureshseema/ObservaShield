@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ObservaShield | AI Security & Observability Agent</title>
+    <meta
+      name="description"
+      content="ObservaShield helps SRE, DevOps, and Security teams correlate logs, metrics, and traces to detect incidents, threats, and risky cloud behavior faster."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <a class="brand" href="#top">
+          <span class="brand-mark"></span>
+          <span>ObservaShield</span>
+        </a>
+        <nav class="site-nav">
+          <a href="#capabilities">Capabilities</a>
+          <a href="#workflows">Workflows</a>
+          <a href="#queries">Queries</a>
+          <a href="#contact">Contact</a>
+        </nav>
+      </header>
+
+      <main id="top">
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">AI-powered security and observability</p>
+            <h1>See incidents earlier. Contain risk faster.</h1>
+            <p class="hero-text">
+              ObservaShield helps SRE, DevOps, and Security teams monitor cloud
+              infrastructure, correlate telemetry, and surface high-priority
+              threats before they turn into outages.
+            </p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="#contact">Book a Demo</a>
+              <a class="button button-secondary" href="#queries"
+                >View Example Queries</a
+              >
+            </div>
+            <ul class="hero-points">
+              <li>Prioritizes P0 and P1 incidents first</li>
+              <li>Correlates logs, metrics, and traces automatically</li>
+              <li>Flags suspicious access and risky cloud configurations</li>
+            </ul>
+          </div>
+
+          <div class="hero-panel">
+            <div class="panel-top">
+              <span class="panel-pill live">Live Incident Feed</span>
+              <span class="panel-pill">AWS prod-eu-west-1</span>
+            </div>
+            <div class="incident-card critical">
+              <div>
+                <p class="label">P0</p>
+                <h2>Unauthorized token usage spike</h2>
+              </div>
+              <p>
+                4.8x increase in failed auth attempts correlated with unusual
+                IAM role assumption from two new IP ranges.
+              </p>
+            </div>
+            <div class="signal-grid">
+              <article>
+                <p class="label">Latency</p>
+                <strong>+182%</strong>
+                <span>checkout-api /payments</span>
+              </article>
+              <article>
+                <p class="label">Errors</p>
+                <strong>12.4%</strong>
+                <span>5xx rate in last 10m</span>
+              </article>
+              <article>
+                <p class="label">Suspicious</p>
+                <strong>23 events</strong>
+                <span>privilege escalation attempts</span>
+              </article>
+              <article>
+                <p class="label">Impact</p>
+                <strong>3 services</strong>
+                <span>trace-linked blast radius</span>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="trusted-strip">
+          <p>Built for teams working across Prometheus, Loki, Grafana, cloud IAM, Kubernetes, and distributed tracing.</p>
+        </section>
+
+        <section class="section" id="capabilities">
+          <div class="section-heading">
+            <p class="eyebrow">Capabilities</p>
+            <h2>One agent for reliability, incident response, and cloud security</h2>
+          </div>
+          <div class="card-grid">
+            <article class="feature-card">
+              <h3>Incident Correlation</h3>
+              <p>
+                Connect logs, metrics, and traces to isolate the service,
+                release, dependency, or traffic pattern driving failures.
+              </p>
+            </article>
+            <article class="feature-card">
+              <h3>Threat Detection</h3>
+              <p>
+                Identify suspicious access spikes, lateral movement signals,
+                exposed endpoints, and unexpected identity behavior.
+              </p>
+            </article>
+            <article class="feature-card">
+              <h3>Actionable Guidance</h3>
+              <p>
+                Get concrete remediation steps, dashboard paths, and
+                PromQL/LogQL suggestions instead of vague summaries.
+              </p>
+            </article>
+            <article class="feature-card">
+              <h3>Compliance Awareness</h3>
+              <p>
+                Surface risky IAM permissions, insecure network exposure, and
+                configuration drift that weakens cloud posture.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section split-section" id="workflows">
+          <div class="section-heading">
+            <p class="eyebrow">Operational workflows</p>
+            <h2>Designed for the way senior SRE and Security teams actually investigate</h2>
+          </div>
+          <div class="workflow-layout">
+            <div class="workflow-list">
+              <article class="workflow-step">
+                <span>01</span>
+                <div>
+                  <h3>Triage critical issues first</h3>
+                  <p>
+                    Separate P0 and P1 conditions from noisy alerts using
+                    latency, error rate, saturation, and threat severity.
+                  </p>
+                </div>
+              </article>
+              <article class="workflow-step">
+                <span>02</span>
+                <div>
+                  <h3>Correlate signals across systems</h3>
+                  <p>
+                    Map dashboards, logs, traces, and infrastructure changes
+                    into a single incident storyline.
+                  </p>
+                </div>
+              </article>
+              <article class="workflow-step">
+                <span>03</span>
+                <div>
+                  <h3>Recommend next commands and checks</h3>
+                  <p>
+                    Suggest kubectl, cloud CLI, PromQL, or LogQL actions to
+                    narrow root cause quickly.
+                  </p>
+                </div>
+              </article>
+            </div>
+            <div class="terminal-card">
+              <div class="terminal-bar">
+                <span></span><span></span><span></span>
+              </div>
+              <pre><code>$ observashield analyze incident --service checkout-api
+
+Priority: P0
+Signals:
+- 5xx error rate exceeded threshold in 3 clusters
+- p95 latency increased after deploy v2026.04.16-3
+- Loki shows auth failures tied to new service account token
+
+Recommended next steps:
+1. Roll back deployment for checkout-api
+2. Inspect IAM bindings for ci-release-bot
+3. Query traces for downstream payment timeout fanout
+4. Block suspicious IPs at ingress / WAF</code></pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="queries">
+          <div class="section-heading">
+            <p class="eyebrow">Example queries</p>
+            <h2>PromQL and LogQL suggestions your teams can use immediately</h2>
+          </div>
+          <div class="query-grid">
+            <article class="query-card">
+              <h3>PromQL: Error rate spike</h3>
+              <pre><code>sum(rate(http_requests_total{status=~"5.."}[5m]))
+/
+sum(rate(http_requests_total[5m]))</code></pre>
+            </article>
+            <article class="query-card">
+              <h3>PromQL: Saturation check</h3>
+              <pre><code>avg(rate(container_cpu_usage_seconds_total{pod=~"checkout-.*"}[5m]))
+by (pod)</code></pre>
+            </article>
+            <article class="query-card">
+              <h3>LogQL: Suspicious auth activity</h3>
+              <pre><code>{app="auth-service"} |= "failed login"
+| json
+| ip != "10.0.0.0/8"</code></pre>
+            </article>
+            <article class="query-card">
+              <h3>LogQL: IAM misuse</h3>
+              <pre><code>{source="cloudtrail"} |= "AssumeRole"
+| json
+| errorCode != ""</code></pre>
+            </article>
+          </div>
+        </section>
+
+        <section class="section emphasis-section">
+          <div class="section-heading">
+            <p class="eyebrow">Security + observability</p>
+            <h2>Observability without security blind spots</h2>
+          </div>
+          <div class="pillars">
+            <article>
+              <h3>Security focus</h3>
+              <p>
+                Detect unusual access patterns, privilege abuse, exposed
+                endpoints, and weak least-privilege controls.
+              </p>
+            </article>
+            <article>
+              <h3>Observability focus</h3>
+              <p>
+                Identify latency spikes, elevated errors, and saturation issues
+                with trace-linked root cause hints.
+              </p>
+            </article>
+            <article>
+              <h3>Operator experience</h3>
+              <p>
+                Concise recommendations, no invented data, and only the details
+                needed to move the incident forward.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section cta-section" id="contact">
+          <div>
+            <p class="eyebrow">Ready to deploy</p>
+            <h2>Give your teams an AI agent that thinks like senior SRE + Security engineering.</h2>
+          </div>
+          <a class="button button-primary" href="mailto:demo@observashield.dev"
+            >demo@observashield.dev</a
+          >
+        </section>
+      </main>
+    </div>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
