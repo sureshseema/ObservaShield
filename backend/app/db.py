@@ -42,6 +42,19 @@ def init_schema(conn: sqlite3.Connection) -> None:
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS agents (
+            agent_id TEXT PRIMARY KEY,
+            payload TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS assets (
+            asset_id TEXT PRIMARY KEY,
+            asset_type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            first_seen TEXT NOT NULL,
+            last_seen TEXT NOT NULL
+        );
         """
     )
     conn.commit()

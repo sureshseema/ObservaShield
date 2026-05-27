@@ -5,6 +5,30 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
+class AgentMode(str, Enum):
+    KUBERNETES = "kubernetes"
+    VM = "vm"
+    ON_PREM = "on_prem"
+
+
+class AgentStatus(str, Enum):
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    OFFLINE = "offline"
+
+
+class AssetType(str, Enum):
+    CLUSTER = "cluster"
+    NODE = "node"
+    VM = "vm"
+    NAMESPACE = "namespace"
+    WORKLOAD = "workload"
+    POD = "pod"
+    CONTAINER = "container"
+    SERVICE = "service"
+    CLOUD_RESOURCE = "cloud_resource"
+
+
 class SignalType(str, Enum):
     METRIC = "metric"
     LOG = "log"
@@ -58,6 +82,31 @@ class ResourceContext(BaseModel):
     service: Optional[str] = None
     identity: Optional[str] = None
     resource_id: Optional[str] = None
+
+
+class AgentHeartbeat(BaseModel):
+    agent_id: str
+    mode: AgentMode
+    version: str = "dev"
+    tenant_id: str = "default"
+    cluster: Optional[str] = None
+    hostname: Optional[str] = None
+    status: AgentStatus = AgentStatus.HEALTHY
+    observed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    capabilities: List[str] = Field(default_factory=list)
+    labels: Dict[str, str] = Field(default_factory=dict)
+
+
+class AssetRecord(BaseModel):
+    asset_id: str
+    asset_type: AssetType
+    name: str
+    context: ResourceContext
+    first_seen: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_seen: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    source_agent_id: Optional[str] = None
+    labels: Dict[str, str] = Field(default_factory=dict)
+    attributes: Dict[str, str] = Field(default_factory=dict)
 
 
 class TelemetryEvent(BaseModel):
@@ -127,6 +176,13 @@ class SignalInventory(BaseModel):
     ai_spm: int = 0
     total_telemetry: int = 0
     total_security: int = 0
+
+
+class OverviewResponse(BaseModel):
+    agents: Dict[str, int]
+    assets: Dict[str, int]
+    signals: SignalInventory
+    incidents: Dict[str, int]
 
 
 class MasterStackStatus(BaseModel):

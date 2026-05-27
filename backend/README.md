@@ -34,7 +34,11 @@ ObservaShield agent prompt (for LLM integrations) lives at the repo root: `../pr
 | GET | `/stack/status` | Master stack health (Mimir, Loki, Tempo, Grafana, ObservaAgent) + signal inventory |
 | POST | `/ingest/telemetry` | Append telemetry events |
 | POST | `/ingest/security` | Append security findings |
-| POST | `/ingest/unified` | ObservaAgent batch ingest (metrics, logs, traces + CWP) |
+| POST | `/ingest/unified` | ObservaAgent batch ingest (agent heartbeat + assets + metrics, logs, traces, events, CWP/security findings) |
+| POST | `/agents/heartbeat` | Register/update Universal Agent status |
+| GET | `/agents` | List Universal Agents |
+| GET | `/assets` | List discovered clusters, services, workloads, nodes, VMs, and cloud resources |
+| GET | `/overview` | Unified workspace counts for agents, assets, signals, and incidents |
 | GET | `/incidents` | List incidents (sorted by priority) |
 | GET | `/incidents/{id}` | Incident detail |
 | PATCH | `/incidents/{id}` | Body: `{"status":"open"\|"acknowledged"\|"resolved"}` |
@@ -98,11 +102,58 @@ ObservaShield agent prompt (for LLM integrations) lives at the repo root: `../pr
 ## Seed sample data (curl)
 
 ```bash
-curl -s -X POST http://127.0.0.1:8080/ingest/telemetry -H 'Content-Type: application/json' -d @- <<'EOF'
-{"events":[{"signal_type":"metric","severity":"high","source":"prometheus","title":"5xx spike","details":"errors","context":{"cloud_account":"demo","region":"eu-west-1","cluster":"eks","namespace":"pay","service":"checkout-api"},"metrics":{"error_rate":0.14,"latency_p95_ms":2400}}]}
-EOF
-curl -s -X POST http://127.0.0.1:8080/ingest/security -H 'Content-Type: application/json' -d @- <<'EOF'
-{"findings":[{"domain":"cspm","severity":"critical","source":"wiz","title":"Exposure","details":"0.0.0.0/0","exploitability":0.9,"context":{"cloud_account":"demo","region":"eu-west-1","cluster":"eks","namespace":"pay","service":"checkout-api"},"tags":[]}]}
+curl -s -X POST http://127.0.0.1:8080/ingest/unified -H 'Content-Type: application/json' -d @- <<'EOF'
+{
+  "agent": {
+    "agent_id": "agent-demo-node-1",
+    "mode": "kubernetes",
+    "version": "0.1.0",
+    "tenant_id": "demo",
+    "cluster": "eks",
+    "hostname": "node-1",
+    "status": "healthy",
+    "capabilities": ["metrics", "logs", "traces", "events", "vulnerability-scan", "cwp-runtime"]
+  },
+  "events": [
+    {
+      "signal_type": "metric",
+      "severity": "high",
+      "source": "observaagent",
+      "title": "5xx spike",
+      "details": "checkout-api errors crossed threshold",
+      "context": {
+        "cloud_account": "demo",
+        "region": "eu-west-1",
+        "cluster": "eks",
+        "namespace": "pay",
+        "service": "checkout-api"
+      },
+      "metrics": {
+        "error_rate": 0.14,
+        "latency_p95_ms": 2400
+      }
+    }
+  ],
+  "findings": [
+    {
+      "domain": "cwp_runtime",
+      "severity": "critical",
+      "source": "observaagent",
+      "title": "Suspicious runtime activity",
+      "details": "Unexpected shell spawned inside checkout-api container",
+      "exploitability": 0.9,
+      "context": {
+        "cloud_account": "demo",
+        "region": "eu-west-1",
+        "cluster": "eks",
+        "namespace": "pay",
+        "service": "checkout-api",
+        "resource_id": "pod/checkout-api-1"
+      },
+      "tags": ["runtime", "cwp"]
+    }
+  ]
+}
 EOF
 ```
 

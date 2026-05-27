@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import List, Tuple
 
 from .db import connect, default_db_path, init_schema
-from .models import IncidentStatus, SecurityFinding, TelemetryEvent
+from .models import AgentHeartbeat, AssetRecord, IncidentStatus, SecurityFinding, TelemetryEvent
 
 
 class SqliteStore:
@@ -18,6 +18,8 @@ class SqliteStore:
         init_schema(self._conn)
         self.telemetry: List[TelemetryEvent] = []
         self.findings: List[SecurityFinding] = []
+        self.agents: dict[str, AgentHeartbeat] = {}
+        self.assets: dict[str, AssetRecord] = {}
         self.incidents: dict[str, "UnifiedIncident"] = {}
         self._load()
 
@@ -27,11 +29,19 @@ class SqliteStore:
     def _load(self) -> None:
         self.telemetry.clear()
         self.findings.clear()
+        self.agents.clear()
+        self.assets.clear()
         cur = self._conn.cursor()
         for (payload,) in cur.execute("SELECT payload FROM telemetry ORDER BY id"):
             self.telemetry.append(TelemetryEvent.model_validate_json(payload))
         for (payload,) in cur.execute("SELECT payload FROM findings ORDER BY id"):
             self.findings.append(SecurityFinding.model_validate_json(payload))
+        for (payload,) in cur.execute("SELECT payload FROM agents ORDER BY agent_id"):
+            agent = AgentHeartbeat.model_validate_json(payload)
+            self.agents[agent.agent_id] = agent
+        for (payload,) in cur.execute("SELECT payload FROM assets ORDER BY asset_type, name"):
+            asset = AssetRecord.model_validate_json(payload)
+            self.assets[asset.asset_id] = asset
 
     def add_telemetry(self, events: List[TelemetryEvent]) -> None:
         if not events:
@@ -58,6 +68,54 @@ class SqliteStore:
                 )
             self._conn.commit()
             self.findings.extend(items)
+
+    def upsert_agent(self, agent: AgentHeartbeat | None) -> None:
+        if agent is None:
+            return
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO agents (agent_id, payload, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(agent_id) DO UPDATE SET
+                    payload = excluded.payload,
+                    updated_at = excluded.updated_at
+                """,
+                (agent.agent_id, agent.model_dump_json(), agent.observed_at.isoformat()),
+            )
+            self._conn.commit()
+            self.agents[agent.agent_id] = agent
+
+    def upsert_assets(self, assets: List[AssetRecord]) -> None:
+        if not assets:
+            return
+        with self._lock:
+            cur = self._conn.cursor()
+            for asset in assets:
+                existing = self.assets.get(asset.asset_id)
+                if existing is not None:
+                    asset.first_seen = existing.first_seen
+                cur.execute(
+                    """
+                    INSERT INTO assets (asset_id, asset_type, name, payload, first_seen, last_seen)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(asset_id) DO UPDATE SET
+                        asset_type = excluded.asset_type,
+                        name = excluded.name,
+                        payload = excluded.payload,
+                        last_seen = excluded.last_seen
+                    """,
+                    (
+                        asset.asset_id,
+                        asset.asset_type.value,
+                        asset.name,
+                        asset.model_dump_json(),
+                        asset.first_seen.isoformat(),
+                        asset.last_seen.isoformat(),
+                    ),
+                )
+                self.assets[asset.asset_id] = asset
+            self._conn.commit()
 
     def context_tuple(
         self,

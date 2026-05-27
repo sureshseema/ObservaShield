@@ -48,6 +48,33 @@ echo "==> Pushing unified ObservaAgent correlation batch to ObservaShield"
 curl -sf -X POST "$API/ingest/unified" \
   -H 'Content-Type: application/json' \
   -d '{
+    "agent": {
+      "agent_id": "agent-eks-prod-node-a",
+      "mode": "kubernetes",
+      "version": "0.1.0",
+      "tenant_id": "customer-001",
+      "cluster": "eks-prod",
+      "hostname": "ip-10-42-1-25",
+      "status": "healthy",
+      "capabilities": ["metrics", "logs", "traces", "kubernetes-events", "vulnerability-scan", "cwp-runtime"]
+    },
+    "assets": [
+      {
+        "asset_id": "node:prod-aws:eks-prod:ip-10-42-1-25",
+        "asset_type": "node",
+        "name": "ip-10-42-1-25",
+        "context": {
+          "cloud_account": "prod-aws",
+          "region": "eu-west-1",
+          "cluster": "eks-prod",
+          "resource_id": "node/ip-10-42-1-25"
+        },
+        "source_agent_id": "agent-eks-prod-node-a",
+        "labels": {
+          "kubernetes.io/os": "linux"
+        }
+      }
+    ],
     "events": [
       {
         "signal_type": "trace",

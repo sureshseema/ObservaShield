@@ -8,9 +8,16 @@ from pydantic import BaseModel, Field
 
 from .engine import rebuild_incidents
 from .models import (
+    AgentHeartbeat,
+    AgentStatus,
+    AssetRecord,
+    AssetType,
     IncidentStatus,
     MasterStackStatus,
+    OverviewResponse,
     SecurityFinding,
+    SignalInventory,
+    SignalType,
     TelemetryEvent,
     UnifiedIncident,
 )
@@ -47,6 +54,8 @@ class SecurityIngestRequest(BaseModel):
 class UnifiedIngestRequest(BaseModel):
     """ObservaAgent batch ingest — metrics, logs, traces, and CWP in one call."""
 
+    agent: AgentHeartbeat | None = None
+    assets: list[AssetRecord] = Field(default_factory=list)
     events: list[TelemetryEvent] = Field(default_factory=list)
     findings: list[SecurityFinding] = Field(default_factory=list)
 
@@ -65,9 +74,79 @@ def health() -> dict[str, str]:
     return {"status": "ok", "product": "ObservaShield"}
 
 
+def _learn_assets_from_contexts(
+    events: list[TelemetryEvent],
+    findings: list[SecurityFinding],
+    agent: AgentHeartbeat | None,
+) -> list[AssetRecord]:
+    learned: dict[str, AssetRecord] = {}
+    source_agent_id = agent.agent_id if agent else None
+    for signal in [*events, *findings]:
+        context = signal.context
+        if context.cluster:
+            asset_id = f"cluster:{context.cloud_account}:{context.cluster}"
+            learned[asset_id] = AssetRecord(
+                asset_id=asset_id,
+                asset_type=AssetType.CLUSTER,
+                name=context.cluster,
+                context=context,
+                source_agent_id=source_agent_id,
+            )
+        if context.service:
+            service_scope = context.cluster or context.region or context.cloud_account
+            namespace = context.namespace or "default"
+            asset_id = f"service:{context.cloud_account}:{service_scope}:{namespace}:{context.service}"
+            learned[asset_id] = AssetRecord(
+                asset_id=asset_id,
+                asset_type=AssetType.SERVICE,
+                name=context.service,
+                context=context,
+                source_agent_id=source_agent_id,
+            )
+        if context.resource_id:
+            asset_id = f"resource:{context.cloud_account}:{context.resource_id}"
+            learned[asset_id] = AssetRecord(
+                asset_id=asset_id,
+                asset_type=AssetType.CLOUD_RESOURCE,
+                name=context.resource_id,
+                context=context,
+                source_agent_id=source_agent_id,
+            )
+    return list(learned.values())
+
+
+def _signal_inventory() -> SignalInventory:
+    inventory = SignalInventory()
+    for event in store.telemetry:
+        inventory.total_telemetry += 1
+        if event.signal_type == SignalType.METRIC:
+            inventory.metrics += 1
+        elif event.signal_type == SignalType.LOG:
+            inventory.logs += 1
+        elif event.signal_type == SignalType.TRACE:
+            inventory.traces += 1
+        elif event.signal_type == SignalType.PROFILE:
+            inventory.profiles += 1
+        elif event.signal_type == SignalType.EVENT:
+            inventory.events += 1
+    for finding in store.findings:
+        inventory.total_security += 1
+        key = finding.domain.value
+        if key in ("cwp_runtime", "cwpm"):
+            inventory.cwp_runtime += 1
+        elif key == "cspm":
+            inventory.cspm += 1
+        elif key == "vuln":
+            inventory.vuln += 1
+        elif key == "ai_spm":
+            inventory.ai_spm += 1
+    return inventory
+
+
 @app.post("/ingest/telemetry")
 def ingest_telemetry(payload: TelemetryIngestRequest) -> dict[str, int]:
     store.add_telemetry(payload.events)
+    store.upsert_assets(_learn_assets_from_contexts(payload.events, [], None))
     rebuild_incidents(store)
     return {"accepted": len(payload.events), "incidents": len(store.incidents)}
 
@@ -75,6 +154,7 @@ def ingest_telemetry(payload: TelemetryIngestRequest) -> dict[str, int]:
 @app.post("/ingest/security")
 def ingest_security(payload: SecurityIngestRequest) -> dict[str, int]:
     store.add_findings(payload.findings)
+    store.upsert_assets(_learn_assets_from_contexts([], payload.findings, None))
     rebuild_incidents(store)
     return {"accepted": len(payload.findings), "incidents": len(store.incidents)}
 
@@ -82,6 +162,9 @@ def ingest_security(payload: SecurityIngestRequest) -> dict[str, int]:
 @app.post("/ingest/unified")
 def ingest_unified(payload: UnifiedIngestRequest) -> dict[str, int | dict[str, int]]:
     """Primary ObservaAgent → ObservaShield ingest for all signal planes."""
+    store.upsert_agent(payload.agent)
+    learned_assets = _learn_assets_from_contexts(payload.events, payload.findings, payload.agent)
+    store.upsert_assets([*payload.assets, *learned_assets])
     store.add_telemetry(payload.events)
     store.add_findings(payload.findings)
     rebuild_incidents(store)
@@ -89,9 +172,54 @@ def ingest_unified(payload: UnifiedIngestRequest) -> dict[str, int | dict[str, i
         "accepted": {
             "telemetry": len(payload.events),
             "security": len(payload.findings),
+            "assets": len(payload.assets) + len(learned_assets),
+            "agents": 1 if payload.agent else 0,
         },
         "incidents": len(store.incidents),
     }
+
+
+@app.post("/agents/heartbeat", response_model=AgentHeartbeat)
+def agent_heartbeat(payload: AgentHeartbeat) -> AgentHeartbeat:
+    store.upsert_agent(payload)
+    return payload
+
+
+@app.get("/agents", response_model=list[AgentHeartbeat])
+def list_agents() -> list[AgentHeartbeat]:
+    return sorted(store.agents.values(), key=lambda agent: agent.agent_id)
+
+
+@app.get("/assets", response_model=list[AssetRecord])
+def list_assets() -> list[AssetRecord]:
+    return sorted(store.assets.values(), key=lambda asset: (asset.asset_type.value, asset.name))
+
+
+@app.get("/overview", response_model=OverviewResponse)
+def overview() -> OverviewResponse:
+    agent_counts = {"total": len(store.agents), "healthy": 0, "degraded": 0, "offline": 0}
+    for agent in store.agents.values():
+        if agent.status == AgentStatus.HEALTHY:
+            agent_counts["healthy"] += 1
+        elif agent.status == AgentStatus.DEGRADED:
+            agent_counts["degraded"] += 1
+        elif agent.status == AgentStatus.OFFLINE:
+            agent_counts["offline"] += 1
+
+    asset_counts = {"total": len(store.assets)}
+    for asset in store.assets.values():
+        asset_counts[asset.asset_type.value] = asset_counts.get(asset.asset_type.value, 0) + 1
+
+    incident_counts = {"total": len(store.incidents), "open": 0, "acknowledged": 0, "resolved": 0}
+    for incident in store.incidents.values():
+        incident_counts[incident.status.value] += 1
+
+    return OverviewResponse(
+        agents=agent_counts,
+        assets=asset_counts,
+        signals=_signal_inventory(),
+        incidents=incident_counts,
+    )
 
 
 @app.get("/stack/status", response_model=MasterStackStatus)

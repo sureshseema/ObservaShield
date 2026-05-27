@@ -3,30 +3,102 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ObservaShield — Incidents</title>
+    <title>ObservaShield — Unified Workspace</title>
     <link rel="stylesheet" href="/assets/dashboard.css" />
   </head>
   <body>
-    <header>
+    <header class="topbar">
       <div>
         <h1>ObservaShield</h1>
-        <div class="sub">Correlated incidents (MVP)</div>
+        <div class="sub">One agent. One place for logs, metrics, traces, events, CWP, assets, alerts, and incidents.</div>
       </div>
+      <nav>
+        <a href="/docs">OpenAPI</a>
+        <a href="/stack/status">Stack status</a>
+      </nav>
     </header>
+
     <main>
       <div id="err" class="error" hidden></div>
-      <ul id="list" class="incidents"></ul>
-      <p id="empty" class="empty" hidden>No incidents yet. POST telemetry or security findings to the API.</p>
+
+      <section class="summary-grid" aria-label="Overview">
+        <article class="summary-card">
+          <span>Agents</span>
+          <strong id="agentTotal">0</strong>
+          <small id="agentDetail">0 healthy</small>
+        </article>
+        <article class="summary-card">
+          <span>Assets</span>
+          <strong id="assetTotal">0</strong>
+          <small id="assetDetail">0 services</small>
+        </article>
+        <article class="summary-card">
+          <span>Telemetry</span>
+          <strong id="telemetryTotal">0</strong>
+          <small id="telemetryDetail">0 metrics · 0 logs · 0 traces</small>
+        </article>
+        <article class="summary-card">
+          <span>Security</span>
+          <strong id="securityTotal">0</strong>
+          <small id="securityDetail">0 CWP · 0 CSPM · 0 vulns</small>
+        </article>
+        <article class="summary-card">
+          <span>Incidents</span>
+          <strong id="incidentTotal">0</strong>
+          <small id="incidentDetail">0 open</small>
+        </article>
+      </section>
+
+      <section class="workspace-grid">
+        <div class="panel">
+          <div class="panel-heading">
+            <h2>Universal Agents</h2>
+            <span id="agentCount">0</span>
+          </div>
+          <ul id="agents" class="entity-list"></ul>
+          <p id="emptyAgents" class="empty" hidden>No agents have checked in yet.</p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-heading">
+            <h2>Assets</h2>
+            <span id="assetCount">0</span>
+          </div>
+          <ul id="assets" class="entity-list"></ul>
+          <p id="emptyAssets" class="empty" hidden>No assets discovered yet.</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Correlated Incidents</h2>
+          <span id="incidentCount">0</span>
+        </div>
+        <ul id="list" class="incidents"></ul>
+        <p id="empty" class="empty" hidden>No incidents yet. POST unified agent data to the API.</p>
+      </section>
     </main>
-    <footer>API: <code>/incidents</code> · <a href="/docs" style="color: inherit">OpenAPI</a></footer>
+
+    <footer>API: <code>/overview</code> · <code>/agents</code> · <code>/assets</code> · <code>/incidents</code></footer>
+
     <script>
-      const listEl = document.getElementById("list");
-      const errEl = document.getElementById("err");
-      const emptyEl = document.getElementById("empty");
+      const els = {
+        err: document.getElementById("err"),
+        agents: document.getElementById("agents"),
+        assets: document.getElementById("assets"),
+        incidents: document.getElementById("list"),
+        empty: document.getElementById("empty"),
+        emptyAgents: document.getElementById("emptyAgents"),
+        emptyAssets: document.getElementById("emptyAssets"),
+      };
+
+      function text(id, value) {
+        document.getElementById(id).textContent = value;
+      }
 
       function showError(msg) {
-        errEl.textContent = msg;
-        errEl.hidden = !msg;
+        els.err.textContent = msg;
+        els.err.hidden = !msg;
       }
 
       function priorityClass(p) {
@@ -35,48 +107,122 @@
         return "p2";
       }
 
-      async function load() {
-        showError("");
-        try {
-          const r = await fetch("/incidents");
-          if (!r.ok) throw new Error("HTTP " + r.status);
-          const data = await r.json();
-          listEl.innerHTML = "";
-          emptyEl.hidden = data.length > 0;
-          for (const inc of data) {
-            const li = document.createElement("li");
-            li.className = "card";
-            li.innerHTML = `
-              <div class="row">
-                <span class="badge ${priorityClass(inc.priority)}">${inc.priority}</span>
-                <span class="status">${inc.status}</span>
-                <span class="meta">score ${inc.score}</span>
-              </div>
-              <p class="summary">${escapeHtml(inc.summary)}</p>
-              <div class="meta">${escapeHtml(inc.correlation_key)} · ${inc.id}</div>
-              <div class="actions">
-                <button type="button" data-act="ack" data-id="${escapeAttr(inc.id)}">Acknowledge</button>
-                <button type="button" class="secondary" data-act="resolve" data-id="${escapeAttr(inc.id)}">Resolve</button>
-              </div>
-            `;
-            listEl.appendChild(li);
-          }
-          listEl.querySelectorAll("button[data-act]").forEach((btn) => {
-            btn.addEventListener("click", () => patch(btn.dataset.id, btn.dataset.act));
-          });
-        } catch (e) {
-          showError(e.message || String(e));
-        }
+      function statusClass(status) {
+        if (status === "healthy" || status === "open") return "good";
+        if (status === "degraded" || status === "acknowledged") return "warn";
+        return "muted";
       }
 
       function escapeHtml(s) {
         const d = document.createElement("div");
-        d.textContent = s;
+        d.textContent = s == null ? "" : String(s);
         return d.innerHTML;
       }
 
       function escapeAttr(s) {
         return String(s).replace(/"/g, "&quot;");
+      }
+
+      async function getJson(path) {
+        const r = await fetch(path);
+        if (!r.ok) throw new Error(path + " returned HTTP " + r.status);
+        return r.json();
+      }
+
+      function renderOverview(overview) {
+        text("agentTotal", overview.agents.total || 0);
+        text("agentDetail", `${overview.agents.healthy || 0} healthy · ${overview.agents.degraded || 0} degraded`);
+        text("assetTotal", overview.assets.total || 0);
+        text("assetDetail", `${overview.assets.service || 0} services · ${overview.assets.cluster || 0} clusters`);
+        text("telemetryTotal", overview.signals.total_telemetry || 0);
+        text("telemetryDetail", `${overview.signals.metrics || 0} metrics · ${overview.signals.logs || 0} logs · ${overview.signals.traces || 0} traces`);
+        text("securityTotal", overview.signals.total_security || 0);
+        text("securityDetail", `${overview.signals.cwp_runtime || 0} CWP · ${overview.signals.cspm || 0} CSPM · ${overview.signals.vuln || 0} vulns`);
+        text("incidentTotal", overview.incidents.total || 0);
+        text("incidentDetail", `${overview.incidents.open || 0} open · ${overview.incidents.acknowledged || 0} acknowledged`);
+      }
+
+      function renderAgents(agents) {
+        text("agentCount", agents.length);
+        els.agents.innerHTML = "";
+        els.emptyAgents.hidden = agents.length > 0;
+        for (const agent of agents.slice(0, 8)) {
+          const li = document.createElement("li");
+          li.className = "entity";
+          li.innerHTML = `
+            <div>
+              <strong>${escapeHtml(agent.agent_id)}</strong>
+              <span>${escapeHtml(agent.mode)} · ${escapeHtml(agent.cluster || agent.hostname || "unscoped")}</span>
+            </div>
+            <em class="${statusClass(agent.status)}">${escapeHtml(agent.status)}</em>
+          `;
+          els.agents.appendChild(li);
+        }
+      }
+
+      function renderAssets(assets) {
+        text("assetCount", assets.length);
+        els.assets.innerHTML = "";
+        els.emptyAssets.hidden = assets.length > 0;
+        for (const asset of assets.slice(0, 10)) {
+          const context = asset.context || {};
+          const li = document.createElement("li");
+          li.className = "entity";
+          li.innerHTML = `
+            <div>
+              <strong>${escapeHtml(asset.name)}</strong>
+              <span>${escapeHtml(asset.asset_type)} · ${escapeHtml(context.cluster || context.region || context.cloud_account)}</span>
+            </div>
+            <em>${escapeHtml(context.namespace || context.cloud_account)}</em>
+          `;
+          els.assets.appendChild(li);
+        }
+      }
+
+      function renderIncidents(data) {
+        text("incidentCount", data.length);
+        els.incidents.innerHTML = "";
+        els.empty.hidden = data.length > 0;
+        for (const inc of data) {
+          const li = document.createElement("li");
+          li.className = "card";
+          li.innerHTML = `
+            <div class="row">
+              <span class="badge ${priorityClass(inc.priority)}">${inc.priority}</span>
+              <span class="status ${statusClass(inc.status)}">${inc.status}</span>
+              <span class="meta">score ${inc.score}</span>
+              <span class="meta">${inc.telemetry_events.length} telemetry · ${inc.security_findings.length} security</span>
+            </div>
+            <p class="summary">${escapeHtml(inc.summary)}</p>
+            <div class="meta">${escapeHtml(inc.correlation_key)} · ${inc.id}</div>
+            <div class="actions">
+              <button type="button" data-act="ack" data-id="${escapeAttr(inc.id)}">Acknowledge</button>
+              <button type="button" class="secondary" data-act="resolve" data-id="${escapeAttr(inc.id)}">Resolve</button>
+            </div>
+          `;
+          els.incidents.appendChild(li);
+        }
+        els.incidents.querySelectorAll("button[data-act]").forEach((btn) => {
+          btn.addEventListener("click", () => patch(btn.dataset.id, btn.dataset.act));
+        });
+      }
+
+      async function load() {
+        showError("");
+        try {
+          const [overview, agents, assets, incidents] = await Promise.all([
+            getJson("/overview"),
+            getJson("/agents"),
+            getJson("/assets"),
+            getJson("/incidents"),
+          ]);
+          renderOverview(overview);
+          renderAgents(agents);
+          renderAssets(assets);
+          renderIncidents(incidents);
+        } catch (e) {
+          showError(e.message || String(e));
+        }
       }
 
       async function patch(id, act) {
@@ -96,6 +242,7 @@
       }
 
       load();
+      setInterval(load, 15000);
     </script>
   </body>
 </html>
