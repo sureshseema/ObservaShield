@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ObservaShield — Incidents</title>
+    <link rel="stylesheet" href="/assets/dashboard.css" />
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>ObservaShield</h1>
+        <div class="sub">Correlated incidents (MVP)</div>
+      </div>
+    </header>
+    <main>
+      <div id="err" class="error" hidden></div>
+      <ul id="list" class="incidents"></ul>
+      <p id="empty" class="empty" hidden>No incidents yet. POST telemetry or security findings to the API.</p>
+    </main>
+    <footer>API: <code>/incidents</code> · <a href="/docs" style="color: inherit">OpenAPI</a></footer>
+    <script>
+      const listEl = document.getElementById("list");
+      const errEl = document.getElementById("err");
+      const emptyEl = document.getElementById("empty");
+
+      function showError(msg) {
+        errEl.textContent = msg;
+        errEl.hidden = !msg;
+      }
+
+      function priorityClass(p) {
+        if (p === "P0") return "p0";
+        if (p === "P1") return "p1";
+        return "p2";
+      }
+
+      async function load() {
+        showError("");
+        try {
+          const r = await fetch("/incidents");
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const data = await r.json();
+          listEl.innerHTML = "";
+          emptyEl.hidden = data.length > 0;
+          for (const inc of data) {
+            const li = document.createElement("li");
+            li.className = "card";
+            li.innerHTML = `
+              <div class="row">
+                <span class="badge ${priorityClass(inc.priority)}">${inc.priority}</span>
+                <span class="status">${inc.status}</span>
+                <span class="meta">score ${inc.score}</span>
+              </div>
+              <p class="summary">${escapeHtml(inc.summary)}</p>
+              <div class="meta">${escapeHtml(inc.correlation_key)} · ${inc.id}</div>
+              <div class="actions">
+                <button type="button" data-act="ack" data-id="${escapeAttr(inc.id)}">Acknowledge</button>
+                <button type="button" class="secondary" data-act="resolve" data-id="${escapeAttr(inc.id)}">Resolve</button>
+              </div>
+            `;
+            listEl.appendChild(li);
+          }
+          listEl.querySelectorAll("button[data-act]").forEach((btn) => {
+            btn.addEventListener("click", () => patch(btn.dataset.id, btn.dataset.act));
+          });
+        } catch (e) {
+          showError(e.message || String(e));
+        }
+      }
+
+      function escapeHtml(s) {
+        const d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+      }
+
+      function escapeAttr(s) {
+        return String(s).replace(/"/g, "&quot;");
+      }
+
+      async function patch(id, act) {
+        const status = act === "resolve" ? "resolved" : "acknowledged";
+        showError("");
+        try {
+          const r = await fetch("/incidents/" + encodeURIComponent(id), {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+          });
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          await load();
+        } catch (e) {
+          showError(e.message || String(e));
+        }
+      }
+
+      load();
+    </script>
+  </body>
+</html>
