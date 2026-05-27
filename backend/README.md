@@ -2,10 +2,12 @@
 
 ObservaShield API correlates:
 
-- Observability signals: metrics, logs, traces
-- Security signals: CWPM + CSPM findings
+- Observability signals: metrics, logs, traces, profiles, events
+- Security signals: CWP runtime, CSPM, vulnerability, AI-SPM findings
 
 into prioritized incidents with **stable IDs**, **SQLite persistence**, and **lifecycle status** (`open` → `acknowledged` → `resolved`).
+
+The **master stack** (`../master-stack/`) provides Mimir, Loki, Tempo, and ObservaAgent (Grafana Alloy) for raw telemetry storage. ObservaShield ingests normalized correlation events via `/ingest/unified`.
 
 ## Quick start
 
@@ -29,8 +31,10 @@ ObservaShield agent prompt (for LLM integrations) lives at the repo root: `../pr
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/health` | Liveness |
+| GET | `/stack/status` | Master stack health (Mimir, Loki, Tempo, Grafana, ObservaAgent) + signal inventory |
 | POST | `/ingest/telemetry` | Append telemetry events |
 | POST | `/ingest/security` | Append security findings |
+| POST | `/ingest/unified` | ObservaAgent batch ingest (metrics, logs, traces + CWP) |
 | GET | `/incidents` | List incidents (sorted by priority) |
 | GET | `/incidents/{id}` | Incident detail |
 | PATCH | `/incidents/{id}` | Body: `{"status":"open"\|"acknowledged"\|"resolved"}` |

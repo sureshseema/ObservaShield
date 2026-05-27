@@ -1,0 +1,86 @@
+// ObservaAgent — Grafana Alloy pipeline
+// Collects metrics, logs, and traces; exports to the ObservaShield master stack.
+// CWP runtime/posture signals are ingested directly into ObservaShield via cwp-simulator or Wiz webhooks.
+
+logging {
+  level = "info"
+}
+
+// ── OTLP receiver (apps, sidecars, demo generators) ──────────────────────────
+
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    metrics = [otelcol.processor.batch.default.input]
+    logs    = [otelcol.processor.batch.default.input]
+    traces  = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  timeout         = "5s"
+  send_batch_size = 1024
+
+  output {
+    metrics = [otelcol.exporter.otlphttp.mimir.input]
+    logs    = [otelcol.exporter.otlphttp.loki.input]
+    traces  = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+// ── Exporters → master stack backends ──────────────────────────────────────
+
+otelcol.exporter.otlphttp "mimir" {
+  client {
+    endpoint = "http://mimir:9009/otlp"
+  }
+}
+
+otelcol.exporter.otlphttp "loki" {
+  client {
+    endpoint = "http://loki:3100/otlp"
+  }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo:4317"
+    tls {
+      insecure = true
+    }
+  }
+}
+
+// ── Self-scrape: Alloy health metrics → Mimir ──────────────────────────────
+
+prometheus.exporter.self "alloy" {}
+
+prometheus.scrape "alloy" {
+  targets    = prometheus.exporter.self.alloy.targets
+  forward_to = [prometheus.remote_write.mimir.receiver]
+}
+
+prometheus.remote_write "mimir" {
+  endpoint {
+    url = "http://mimir:9009/api/v1/push"
+  }
+}
+
+// ── Kubernetes discovery (enable when running in-cluster) ────────────────────
+// Uncomment and mount kubeconfig / service account when deploying to K8s.
+//
+// discovery.kubernetes "pods" {
+//   role = "pod"
+// }
+//
+// prometheus.scrape "kube_pods" {
+//   targets    = discovery.kubernetes.pods.targets
+//   forward_to = [prometheus.remote_write.mimir.receiver]
+// }

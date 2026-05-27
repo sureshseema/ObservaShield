@@ -1,0 +1,112 @@
+# ObservaShield master stack — unified LGTM backends + ObservaAgent (Grafana Alloy)
+#
+# Stores all ObservaAgent telemetry planes:
+#   metrics → Mimir
+#   logs    → Loki
+#   traces  → Tempo
+#   CWP     → ObservaShield API (via cwp-simulator / Wiz webhook)
+#
+# Start:  docker compose up -d
+# UI:     http://localhost:3000  (admin / observashield)
+# Alloy:  http://localhost:12345
+# OTLP:   localhost:4317 (gRPC) / localhost:4318 (HTTP)
+
+services:
+  mimir:
+    image: grafana/mimir:2.14.0
+    command: ["-config.file=/etc/mimir/mimir.yaml"]
+    volumes:
+      - ./config/mimir.yaml:/etc/mimir/mimir.yaml:ro
+      - mimir-data:/data
+    ports:
+      - "9009:9009"
+    networks:
+      - observashield
+
+  loki:
+    image: grafana/loki:3.0.0
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./config/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - observashield
+
+  tempo:
+    image: grafana/tempo:2.3.1
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./config/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/tmp/tempo
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+    networks:
+      - observashield
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: observashield
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mimir
+      - loki
+      - tempo
+    networks:
+      - observashield
+
+  observaagent:
+    image: grafana/alloy:v1.4.2
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+    volumes:
+      - ./observaagent/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+    ports:
+      - "12345:12345"
+      - "4318:4318"
+    depends_on:
+      - mimir
+      - loki
+      - tempo
+    networks:
+      - observashield
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  cwp-simulator:
+    build: ./cwp
+    environment:
+      OBSERVASHIELD_API: http://host.docker.internal:8080
+      LOKI_URL: http://loki:3100
+      INTERVAL_SEC: "30"
+    depends_on:
+      - loki
+    networks:
+      - observashield
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  observashield:
+    name: observashield-master
+
+volumes:
+  mimir-data:
+  loki-data:
+  tempo-data:
+  grafana-data:
+  alloy-data:

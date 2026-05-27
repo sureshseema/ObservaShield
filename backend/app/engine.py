@@ -83,8 +83,16 @@ def _actions(findings: list[SecurityFinding], telemetry: list[TelemetryEvent]) -
     ]
     if any(f.domain.value == "cspm" for f in findings):
         actions.append("Review cloud posture drift and patch exposed network/IAM misconfigurations.")
-    if any(f.domain.value == "cwpm" for f in findings):
+    if any(f.domain.value in ("cwpm", "cwp_runtime") for f in findings):
         actions.append("Isolate suspicious workload and run container/image integrity checks.")
+    if any(f.domain.value == "vuln" for f in findings):
+        actions.append("Patch or mitigate CVE findings; prioritize by EPSS and runtime validation.")
+    if any(f.domain.value == "ai_spm" for f in findings):
+        actions.append("Review model endpoint access logs and tighten AI service account permissions.")
+    if any(t.signal_type.value == "log" for t in telemetry):
+        actions.append("Query Loki for correlated log lines using trace_id and service labels.")
+    if any(t.signal_type.value == "trace" for t in telemetry):
+        actions.append("Inspect Tempo trace waterfall for error spans and downstream dependency failures.")
     if any(t.signal_type.value == "metric" for t in telemetry):
         actions.append("Confirm error budget impact and enforce temporary alert threshold guardrails.")
     return actions

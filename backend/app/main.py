@@ -7,7 +7,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .engine import rebuild_incidents
-from .models import IncidentStatus, SecurityFinding, TelemetryEvent, UnifiedIncident
+from .models import (
+    IncidentStatus,
+    MasterStackStatus,
+    SecurityFinding,
+    TelemetryEvent,
+    UnifiedIncident,
+)
+from .stack import get_master_stack_status
 from .storage import SqliteStore
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -37,6 +44,13 @@ class SecurityIngestRequest(BaseModel):
     findings: list[SecurityFinding] = Field(default_factory=list)
 
 
+class UnifiedIngestRequest(BaseModel):
+    """ObservaAgent batch ingest — metrics, logs, traces, and CWP in one call."""
+
+    events: list[TelemetryEvent] = Field(default_factory=list)
+    findings: list[SecurityFinding] = Field(default_factory=list)
+
+
 class IncidentPatchRequest(BaseModel):
     status: IncidentStatus
 
@@ -63,6 +77,26 @@ def ingest_security(payload: SecurityIngestRequest) -> dict[str, int]:
     store.add_findings(payload.findings)
     rebuild_incidents(store)
     return {"accepted": len(payload.findings), "incidents": len(store.incidents)}
+
+
+@app.post("/ingest/unified")
+def ingest_unified(payload: UnifiedIngestRequest) -> dict[str, int | dict[str, int]]:
+    """Primary ObservaAgent → ObservaShield ingest for all signal planes."""
+    store.add_telemetry(payload.events)
+    store.add_findings(payload.findings)
+    rebuild_incidents(store)
+    return {
+        "accepted": {
+            "telemetry": len(payload.events),
+            "security": len(payload.findings),
+        },
+        "incidents": len(store.incidents),
+    }
+
+
+@app.get("/stack/status", response_model=MasterStackStatus)
+async def stack_status() -> MasterStackStatus:
+    return await get_master_stack_status(store)
 
 
 @app.get("/incidents", response_model=list[UnifiedIncident])
